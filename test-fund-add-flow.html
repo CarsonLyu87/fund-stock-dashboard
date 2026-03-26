@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基金添加流程测试</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .test { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        button { padding: 10px 15px; margin: 5px; }
+        .log { background: #f5f5f5; padding: 10px; margin-top: 10px; font-family: monospace; white-space: pre-wrap; }
+        .success { color: green; }
+        .error { color: red; }
+        .step { margin: 10px 0; padding: 10px; background: #f0f8ff; border-left: 4px solid #1890ff; }
+    </style>
+</head>
+<body>
+    <h1>基金添加流程测试</h1>
+    <p>测试基金搜索 → 关注 → 加入列表的完整流程</p>
+    
+    <div class="test">
+        <h2>测试流程</h2>
+        
+        <div class="step">
+            <h3>步骤1: 检查localStorage状态</h3>
+            <button onclick="checkLocalStorage()">检查localStorage</button>
+            <div id="step1-result"></div>
+            <div id="step1-log" class="log"></div>
+        </div>
+        
+        <div class="step">
+            <h3>步骤2: 模拟添加基金到localStorage</h3>
+            <button onclick="addFundToStorage()">添加基金005827到localStorage</button>
+            <div id="step2-result"></div>
+            <div id="step2-log" class="log"></div>
+        </div>
+        
+        <div class="step">
+            <h3>步骤3: 测试getUserFundCodes函数</h3>
+            <button onclick="testGetUserFundCodes()">测试获取用户基金代码</button>
+            <div id="step3-result"></div>
+            <div id="step3-log" class="log"></div>
+        </div>
+        
+        <div class="step">
+            <h3>步骤4: 加载应用测试完整流程</h3>
+            <button onclick="loadAppAndTest()">加载应用并测试</button>
+            <div id="step4-result"></div>
+            <div id="step4-log" class="log"></div>
+        </div>
+        
+        <div class="step">
+            <h3>步骤5: 清理测试数据</h3>
+            <button onclick="clearTestData()">清理localStorage测试数据</button>
+            <div id="step5-result"></div>
+            <div id="step5-log" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        function log(stepId, message) {
+            const logDiv = document.getElementById(`step${stepId}-log`);
+            if (logDiv) {
+                logDiv.textContent += message + '\n';
+            }
+            console.log(`[Step${stepId}]`, message);
+        }
+        
+        function setResult(stepId, message, isSuccess) {
+            const resultDiv = document.getElementById(`step${stepId}-result`);
+            if (resultDiv) {
+                resultDiv.innerHTML = `<span class="${isSuccess ? 'success' : 'error'}">${message}</span>`;
+            }
+        }
+        
+        // 步骤1: 检查localStorage状态
+        function checkLocalStorage() {
+            log(1, '检查localStorage状态...');
+            
+            const keys = Object.keys(localStorage);
+            log(1, `localStorage中有 ${keys.length} 个键`);
+            
+            keys.forEach(key => {
+                if (key.includes('fund')) {
+                    try {
+                        const value = localStorage.getItem(key);
+                        const parsed = JSON.parse(value);
+                        log(1, `🔑 ${key}: ${JSON.stringify(parsed, null, 2)}`);
+                    } catch (e) {
+                        log(1, `🔑 ${key}: ${value} (无法解析为JSON)`);
+                    }
+                }
+            });
+            
+            // 检查用户基金配置
+            const userFundsKey = 'fund_stock_show_user_funds';
+            const userFunds = localStorage.getItem(userFundsKey);
+            
+            if (userFunds) {
+                try {
+                    const parsed = JSON.parse(userFunds);
+                    log(1, `📋 用户基金配置: ${parsed.length} 只基金`);
+                    parsed.forEach(fund => {
+                        log(1, `   - ${fund.code}: ${fund.name} (添加于: ${fund.addedAt})`);
+                    });
+                    setResult(1, `找到 ${parsed.length} 只用户基金`, true);
+                } catch (e) {
+                    log(1, `❌ 解析用户基金配置失败: ${e.message}`);
+                    setResult(1, '用户基金配置格式错误', false);
+                }
+            } else {
+                log(1, '⚠️ 未找到用户基金配置');
+                setResult(1, '未找到用户基金配置', false);
+            }
+        }
+        
+        // 步骤2: 模拟添加基金到localStorage
+        function addFundToStorage() {
+            log(2, '模拟添加基金到localStorage...');
+            
+            const fund = {
+                code: '005827',
+                name: '易方达蓝筹精选混合',
+                addedAt: new Date().toISOString(),
+                notes: '测试添加的基金'
+            };
+            
+            // 获取现有基金列表
+            const userFundsKey = 'fund_stock_show_user_funds';
+            let userFunds = [];
+            
+            try {
+                const stored = localStorage.getItem(userFundsKey);
+                if (stored) {
+                    userFunds = JSON.parse(stored);
+                    if (!Array.isArray(userFunds)) {
+                        userFunds = [];
+                    }
+                }
+            } catch (e) {
+                log(2, `⚠️ 解析现有基金列表失败: ${e.message}`);
+                userFunds = [];
+            }
+            
+            // 检查是否已存在
+            const existingIndex = userFunds.findIndex(f => f.code === fund.code);
+            if (existingIndex >= 0) {
+                log(2, `⚠️ 基金 ${fund.code} 已存在，更新信息`);
+                userFunds[existingIndex] = fund;
+            } else {
+                log(2, `✅ 添加新基金: ${fund.code} - ${fund.name}`);
+                userFunds.push(fund);
+            }
+            
+            // 保存到localStorage
+            try {
+                localStorage.setItem(userFundsKey, JSON.stringify(userFunds));
+                log(2, `💾 保存成功: ${userFunds.length} 只基金`);
+                log(2, `基金列表: ${userFunds.map(f => f.code).join(', ')}`);
+                setResult(2, `成功添加/更新基金 ${fund.code}`, true);
+            } catch (e) {
+                log(2, `❌ 保存失败: ${e.message}`);
+                setResult(2, '保存失败', false);
+            }
+        }
+        
+        // 步骤3: 测试getUserFundCodes函数
+        function testGetUserFundCodes() {
+            log(3, '测试getUserFundCodes函数...');
+            
+            // 模拟项目中的getUserFundCodes函数
+            function getUserFundCodes() {
+                try {
+                    // 尝试从localStorage获取用户基金配置
+                    const stored = localStorage.getItem('fund_stock_show_user_funds');
+                    if (stored) {
+                        const userFunds = JSON.parse(stored);
+                        if (Array.isArray(userFunds) && userFunds.length > 0) {
+                            return userFunds.map((fund) => fund.code);
+                        }
+                    }
+                } catch (error) {
+                    console.error('获取用户基金列表失败:', error);
+                }
+                
+                // 默认基金列表
+                return [
+                    '005827', '161725', '003095', '110022', '519674',
+                    '260108', '000404', '001714', '000248', '001475'
+                ];
+            }
+            
+            const fundCodes = getUserFundCodes();
+            log(3, `📋 获取到 ${fundCodes.length} 只基金代码:`);
+            fundCodes.forEach(code => {
+                log(3, `   - ${code}`);
+            });
+            
+            if (fundCodes.length > 0) {
+                setResult(3, `成功获取 ${fundCodes.length} 只基金代码`, true);
+            } else {
+                setResult(3, '未获取到基金代码', false);
+            }
+        }
+        
+        // 步骤4: 加载应用测试完整流程
+        function loadAppAndTest() {
+            log(4, '开始加载应用测试完整流程...');
+            
+            // 先清理之前的测试
+            const existingScript = document.querySelector('script[data-test="app"]');
+            if (existingScript) {
+                existingScript.remove();
+            }
+            
+            // 创建iframe加载应用
+            const iframe = document.createElement('iframe');
+            iframe.src = './index.html';
+            iframe.style.width = '100%';
+            iframe.style.height = '600px';
+            iframe.style.border = '1px solid #ccc';
+            iframe.style.marginTop = '10px';
+            
+            const container = document.getElementById('step4-log');
+            if (container) {
+                container.innerHTML = '';
+                container.appendChild(iframe);
+            }
+            
+            log(4, '✅ 应用已加载到iframe中');
+            log(4, '请在iframe中测试：');
+            log(4, '1. 搜索基金（如：005827）');
+            log(4, '2. 点击"关注"按钮');
+            log(4, '3. 查看基金是否出现在下面的监控列表中');
+            
+            setResult(4, '应用已加载，请在iframe中测试', true);
+        }
+        
+        // 步骤5: 清理测试数据
+        function clearTestData() {
+            log(5, '清理测试数据...');
+            
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.includes('fund')) {
+                    keysToRemove.push(key);
+                }
+            }
+            
+            keysToRemove.forEach(key => {
+                localStorage.removeItem(key);
+                log(5, `🗑️  已删除: ${key}`);
+            });
+            
+            log(5, `✅ 已清理 ${keysToRemove.length} 个基金相关键`);
+            setResult(5, `已清理 ${keysToRemove.length} 个基金相关键`, true);
+        }
+        
+        // 页面加载时自动检查
+        window.addEventListener('load', function() {
+            console.log('基金添加流程测试页面加载完成');
+            console.log('测试步骤：');
+            console.log('1. 检查localStorage状态');
+            console.log('2. 模拟添加基金');
+            console.log('3. 测试获取基金代码');
+            console.log('4. 加载完整应用测试');
+            console.log('5. 清理测试数据');
+        });
+    </script>
+</body>
+</html>

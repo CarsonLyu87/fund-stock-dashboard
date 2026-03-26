@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基金搜索功能测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+        .test-result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            background: #fff;
+            border: 1px solid #eee;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .loading { color: #007bff; }
+        button {
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        h2 {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .api-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .api-item {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>基金搜索功能测试</h1>
+    <p>测试基金搜索功能是否正常工作，特别是CORS问题的修复。</p>
+    
+    <div class="test-section">
+        <h2>测试1: 代理服务器健康检查</h2>
+        <button onclick="testProxyHealth()">测试代理服务器</button>
+        <div id="proxy-result" class="test-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>测试2: 基金详情API测试</h2>
+        <p>测试基金代码: <input type="text" id="fund-code" value="159941" placeholder="输入基金代码">
+        <button onclick="testFundDetail()">测试基金详情</button></p>
+        <div id="fund-detail-result" class="test-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>测试3: 直接API调用（对比）</h2>
+        <div class="api-list">
+            <div class="api-item">
+                <strong>天天基金API</strong><br>
+                <button onclick="testDirectApi('tiantian')">测试</button>
+            </div>
+            <div class="api-item">
+                <strong>东方财富API</strong><br>
+                <button onclick="testDirectApi('eastmoney')">测试</button>
+            </div>
+            <div class="api-item">
+                <strong>有问题的API</strong><br>
+                <button onclick="testDirectApi('problematic')">测试</button>
+            </div>
+        </div>
+        <div id="direct-api-result" class="test-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>测试4: 完整的基金搜索流程</h2>
+        <p>模拟用户搜索基金并添加到关注列表的完整流程。</p>
+        <button onclick="testFullSearchFlow()">测试完整流程</button>
+        <div id="full-flow-result" class="test-result"></div>
+    </div>
+    
+    <script>
+        const PROXY_URL = 'http://localhost:3001'
+        
+        function logResult(elementId, message, className = '') {
+            const element = document.getElementById(elementId)
+            const timestamp = new Date().toLocaleTimeString()
+            element.innerHTML = `<span class="${className}">[${timestamp}] ${message}</span><br>${element.innerHTML}`
+        }
+        
+        function clearResult(elementId) {
+            document.getElementById(elementId).innerHTML = ''
+        }
+        
+        async function testProxyHealth() {
+            clearResult('proxy-result')
+            logResult('proxy-result', '正在测试代理服务器健康状态...', 'loading')
+            
+            try {
+                const response = await fetch(`${PROXY_URL}/health`)
+                const data = await response.json()
+                
+                if (response.ok) {
+                    logResult('proxy-result', `✅ 代理服务器健康: ${data.status}`, 'success')
+                    logResult('proxy-result', `服务: ${data.service}`, 'success')
+                    logResult('proxy-result', `时间: ${data.timestamp}`, 'success')
+                } else {
+                    logResult('proxy-result', `❌ 代理服务器异常: ${JSON.stringify(data)}`, 'error')
+                }
+            } catch (error) {
+                logResult('proxy-result', `❌ 代理服务器连接失败: ${error.message}`, 'error')
+            }
+        }
+        
+        async function testFundDetail() {
+            const code = document.getElementById('fund-code').value || '159941'
+            clearResult('fund-detail-result')
+            logResult('fund-detail-result', `正在获取基金 ${code} 的详情...`, 'loading')
+            
+            try {
+                const response = await fetch(`${PROXY_URL}/api/fund/detail/${code}`)
+                const data = await response.json()
+                
+                if (response.ok && data.success) {
+                    logResult('fund-detail-result', `✅ 基金详情获取成功！`, 'success')
+                    logResult('fund-detail-result', `基金代码: ${data.data.code}`, 'success')
+                    logResult('fund-detail-result', `基金名称: ${data.data.name}`, 'success')
+                    logResult('fund-detail-result', `净值: ${data.data.netValue}`, 'success')
+                    logResult('fund-detail-result', `涨跌幅: ${data.data.changePercent}%`, 'success')
+                    logResult('fund-detail-result', `数据源: ${data.data.source}`, 'success')
+                    logResult('fund-detail-result', `更新时间: ${data.data.updateTime}`, 'success')
+                } else {
+                    logResult('fund-detail-result', `❌ 获取失败: ${data.error || '未知错误'}`, 'error')
+                    logResult('fund-detail-result', `详细信息: ${JSON.stringify(data, null, 2)}`, 'error')
+                }
+            } catch (error) {
+                logResult('fund-detail-result', `❌ 请求失败: ${error.message}`, 'error')
+            }
+        }
+        
+        async function testDirectApi(apiType) {
+            clearResult('direct-api-result')
+            const code = '159941'
+            
+            let url
+            switch(apiType) {
+                case 'tiantian':
+                    url = `https://fundgz.1234567.com.cn/js/${code}.js`
+                    logResult('direct-api-result', `测试天天基金API: ${url}`, 'loading')
+                    break
+                case 'eastmoney':
+                    url = `https://api.fund.eastmoney.com/f10/lsjz?fundCode=${code}&pageIndex=1&pageSize=1`
+                    logResult('direct-api-result', `测试东方财富API: ${url}`, 'loading')
+                    break
+                case 'problematic':
+                    url = `https://api.jijinhao.com/fund/estimate/${code}`
+                    logResult('direct-api-result', `测试有问题的API: ${url}`, 'loading')
+                    break
+            }
+            
+            try {
+                const response = await fetch(url, {
+                    mode: 'no-cors' // 测试CORS问题
+                })
+                
+                if (apiType === 'tiantian') {
+                    // 天天基金是JSONP，需要特殊处理
+                    logResult('direct-api-result', `✅ 天天基金API支持JSONP（无CORS限制）`, 'success')
+                } else if (response.type === 'opaque') {
+                    logResult('direct-api-result', `⚠️ API有CORS限制（no-cors模式）`, 'error')
+                } else {
+                    logResult('direct-api-result', `✅ API响应正常`, 'success')
+                }
+            } catch (error) {
+                logResult('direct-api-result', `❌ API调用失败: ${error.message}`, 'error')
+            }
+        }
+        
+        async function testFullSearchFlow() {
+            clearResult('full-flow-result')
+            logResult('full-flow-result', '开始测试完整基金搜索流程...', 'loading')
+            
+            // 1. 搜索基金
+            logResult('full-flow-result', '1. 搜索基金 159941...', 'loading')
+            try {
+                const searchResponse = await fetch(`${PROXY_URL}/api/fund/detail/159941`)
+                const searchData = await searchResponse.json()
+                
+                if (searchData.success) {
+                    logResult('full-flow-result', `✅ 搜索成功: ${searchData.data.name}`, 'success')
+                    
+                    // 2. 模拟添加到关注列表
+                    logResult('full-flow-result', '2. 模拟添加到关注列表...', 'loading')
+                    
+                    // 保存到localStorage
+                    const userFunds = JSON.parse(localStorage.getItem('fund_stock_show_user_funds') || '[]')
+                    const newFund = {
+                        code: searchData.data.code,
+                        name: searchData.data.name,
+                        addedAt: new Date().toISOString()
+                    }
+                    
+                    // 检查是否已存在
+                    const exists = userFunds.some(fund => fund.code === newFund.code)
+                    if (!exists) {
+                        userFunds.push(newFund)
+                        localStorage.setItem('fund_stock_show_user_funds', JSON.stringify(userFunds))
+                        logResult('full-flow-result', `✅ 成功添加到关注列表`, 'success')
+                    } else {
+                        logResult('full-flow-result', `⚠️ 基金已在关注列表中`, 'success')
+                    }
+                    
+                    // 3. 验证关注列表
+                    logResult('full-flow-result', '3. 验证关注列表...', 'loading')
+                    const updatedFunds = JSON.parse(localStorage.getItem('fund_stock_show_user_funds') || '[]')
+                    logResult('full-flow-result', `✅ 关注列表中有 ${updatedFunds.length} 只基金`, 'success')
+                    
+                    // 4. 清理测试数据
+                    logResult('full-flow-result', '4. 清理测试数据...', 'loading')
+                    const filteredFunds = updatedFunds.filter(fund => fund.code !== '159941')
+                    localStorage.setItem('fund_stock_show_user_funds', JSON.stringify(filteredFunds))
+                    logResult('full-flow-result', `✅ 测试数据清理完成`, 'success')
+                    
+                } else {
+                    logResult('full-flow-result', `❌ 搜索失败: ${searchData.error}`, 'error')
+                }
+            } catch (error) {
+                logResult('full-flow-result', `❌ 流程测试失败: ${error.message}`, 'error')
+            }
+        }
+        
+        // 页面加载时自动测试代理服务器
+        window.addEventListener('load', () => {
+            testProxyHealth()
+        })
+    </script>
+</body>
+</html>

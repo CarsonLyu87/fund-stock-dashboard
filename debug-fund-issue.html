@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基金问题调试</title>
+    <style>
+        body {
+            font-family: monospace;
+            margin: 20px;
+            line-height: 1.4;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background: #f5f5f5;
+        }
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .log {
+            margin-top: 10px;
+            padding: 10px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+        .error { color: red; }
+        .success { color: green; }
+        .warning { color: orange; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>基金问题调试工具</h1>
+    
+    <div class="section">
+        <h2>1. 检查localStorage状态</h2>
+        <button onclick="checkLocalStorage()">检查localStorage</button>
+        <div id="localstorage-log" class="log"></div>
+    </div>
+    
+    <div class="section">
+        <h2>2. 测试基金添加</h2>
+        <p>基金代码: <input type="text" id="fund-code" value="159941">
+        <button onclick="testFundAdd()">测试添加</button></p>
+        <div id="add-log" class="log"></div>
+    </div>
+    
+    <div class="section">
+        <h2>3. 测试基金数据加载</h2>
+        <button onclick="testFundDataLoad()">测试数据加载</button>
+        <div id="load-log" class="log"></div>
+    </div>
+    
+    <div class="section">
+        <h2>4. 模拟组件更新</h2>
+        <button onclick="simulateComponentUpdate()">模拟组件更新</button>
+        <div id="component-log" class="log"></div>
+    </div>
+    
+    <div class="section">
+        <h2>5. 检查HTTP头问题</h2>
+        <button onclick="testHttpHeaders()">测试HTTP头</button>
+        <div id="http-log" class="log"></div>
+    </div>
+    
+    <div class="section">
+        <h2>6. 清理和重置</h2>
+        <button onclick="resetTestData()" style="background: red;">重置测试数据</button>
+        <div id="reset-log" class="log"></div>
+    </div>
+    
+    <script>
+        const PROXY_URL = 'http://localhost:3001'
+        
+        function logTo(elementId, message, className = '') {
+            const element = document.getElementById(elementId)
+            const timestamp = new Date().toLocaleTimeString()
+            element.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`
+            element.scrollTop = element.scrollHeight
+        }
+        
+        function clearLog(elementId) {
+            document.getElementById(elementId).innerHTML = ''
+        }
+        
+        function checkLocalStorage() {
+            clearLog('localstorage-log')
+            
+            // 检查fund_stock_show_user_funds
+            const userFunds = JSON.parse(localStorage.getItem('fund_stock_show_user_funds') || '[]')
+            logTo('localstorage-log', `用户基金列表: ${userFunds.length} 只基金`, 'info')
+            
+            userFunds.forEach((fund, index) => {
+                logTo('localstorage-log', `${index + 1}. ${fund.code} - ${fund.name || '未知'} (添加时间: ${new Date(fund.addedAt).toLocaleString()})`, 'info')
+            })
+            
+            // 检查其他相关存储
+            const keys = []
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i)
+                if (key.includes('fund') || key.includes('stock')) {
+                    keys.push(key)
+                }
+            }
+            
+            logTo('localstorage-log', `相关存储键: ${keys.join(', ')}`, 'info')
+        }
+        
+        async function testFundAdd() {
+            clearLog('add-log')
+            const fundCode = document.getElementById('fund-code').value.trim()
+            
+            if (!/^\d{6}$/.test(fundCode)) {
+                logTo('add-log', '❌ 无效的基金代码', 'error')
+                return
+            }
+            
+            logTo('add-log', `开始测试添加基金 ${fundCode}...`, 'info')
+            
+            try {
+                // 1. 获取基金详情
+                logTo('add-log', '获取基金详情...', 'info')
+                const response = await fetch(`${PROXY_URL}/api/fund/detail/${fundCode}`)
+                const data = await response.json()
+                
+                if (data.success) {
+                    logTo('add-log', `✅ 获取详情成功: ${data.data.name}`, 'success')
+                    
+                    // 2. 添加到localStorage
+                    const userFunds = JSON.parse(localStorage.getItem('fund_stock_show_user_funds') || '[]')
+                    const exists = userFunds.some(fund => fund.code === fundCode)
+                    
+                    if (exists) {
+                        logTo('add-log', '⚠️ 基金已存在', 'warning')
+                    } else {
+                        userFunds.push({
+                            code: fundCode,
+                            name: data.data.name,
+                            addedAt: new Date().toISOString()
+                        })
+                        localStorage.setItem('fund_stock_show_user_funds', JSON.stringify(userFunds))
+                        logTo('add-log', '✅ 添加到localStorage成功', 'success')
+                    }
+                    
+                    // 3. 触发storage事件（模拟其他标签页更新）
+                    window.dispatchEvent(new StorageEvent('storage', {
+                        key: 'fund_stock_show_user_funds',
+                        newValue: JSON.stringify(userFunds),
+                        oldValue: localStorage.getItem('fund_stock_show_user_funds'),
+                        storageArea: localStorage
+                    }))
+                    logTo('add-log', '✅ 触发storage事件', 'success')
+                    
+                } else {
+                    logTo('add-log', `❌ 获取详情失败: ${data.error}`, 'error')
+                }
+                
+            } catch (error) {
+                logTo('add-log', `❌ 请求失败: ${error.message}`, 'error')
+            }
+        }
+        
+        async function testFundDataLoad() {
+            clearLog('load-log')
+            logTo('load-log', '测试基金数据加载...', 'info')
+            
+            try {
+                // 模拟fetchFundData函数
+                const userFunds = JSON.parse(localStorage.getItem('fund_stock_show_user_funds') || '[]')
+                const userFundCodes = userFunds.map(fund => fund.code)
+                
+                logTo('load-log', `用户基金代码: ${userFundCodes.join(', ')}`, 'info')
+                
+                if (userFundCodes.length === 0) {
+                    logTo('load-log', '⚠️ 没有用户基金，使用默认列表', 'warning')
+                    userFundCodes.push('005827', '161725', '003095')
+                }
+                
+                // 尝试通过代理获取数据
+                logTo('load-log', '通过代理获取基金数据...', 'info')
+                const response = await fetch(`${PROXY_URL}/api/funds/batch?codes=${userFundCodes.join(',')}`)
+                const data = await response.json()
+                
+                if (data.success) {
+                    logTo('load-log', `✅ 获取 ${data.data.length} 只基金数据`, 'success')
+                    
+                    data.data.forEach((fund, index) => {
+                        if (fund.error) {
+                            logTo('load-log', `${index + 1}. ${fund.code}: ❌ ${fund.error}`, 'error')
+                        } else {
+                            logTo('load-log', `${index + 1}. ${fund.code}: ✅ 获取成功`, 'success')
+                        }
+                    })
+                } else {
+                    logTo('load-log', `❌ 批量获取失败: ${data.error}`, 'error')
+                }
+                
+            } catch (error) {
+                logTo('load-log', `❌ 数据加载失败: ${error.message}`, 'error')
+            }
+        }
+        
+        function simulateComponentUpdate() {
+            clearLog('component-log')
+            logTo('component-log', '模拟组件更新...', 'info')
+            
+            // 模拟触发React状态更新
+            const event = new CustomEvent('fundsUpdated', {
+                detail: { timestamp: Date.now() }
+            })
+            window.dispatchEvent(event)
+            logTo('component-log', '✅ 触发fundsUpdated事件', 'success')
+            
+            // 模拟localStorage变化
+            const userFunds = JSON.parse(localStorage.getItem('fund_stock_show_user_funds') || '[]')
+            logTo('component-log', `当前基金数量: ${userFunds.length}`, 'info')
+            
+            // 检查是否应该显示新基金
+            const newFundCode = document.getElementById('fund-code').value.trim()
+            const hasNewFund = userFunds.some(fund => fund.code === newFundCode)
+            
+            if (hasNewFund) {
+                logTo('component-log', `✅ 基金 ${newFundCode} 在列表中`, 'success')
+            } else {
+                logTo('component-log', `❌ 基金 ${newFundCode} 不在列表中`, 'error')
+            }
+        }
+        
+        function testHttpHeaders() {
+            clearLog('http-log')
+            logTo('http-log', '测试HTTP头设置...', 'info')
+            
+            // 测试设置各种HTTP头
+            const testHeaders = [
+                'User-Agent',
+                'Accept-Encoding', 
+                'Connection',
+                'Referer',
+                'Content-Type',
+                'Accept'
+            ]
+            
+            testHeaders.forEach(header => {
+                try {
+                    const xhr = new XMLHttpRequest()
+                    xhr.open('GET', 'https://httpbin.org/headers', true)
+                    xhr.setRequestHeader(header, 'test-value')
+                    
+                    xhr.onload = function() {
+                        logTo('http-log', `✅ ${header}: 可以设置`, 'success')
+                    }
+                    
+                    xhr.onerror = function() {
+                        logTo('http-log', `❌ ${header}: 设置失败`, 'error')
+                    }
+                    
+                    xhr.send()
+                } catch (error) {
+                    logTo('http-log', `❌ ${header}: ${error.message}`, 'error')
+                }
+            })
+            
+            // 测试fetch API的头设置
+            logTo('http-log', '测试fetch API...', 'info')
+            
+            fetch('https://httpbin.org/headers', {
+                headers: {
+                    'User-Agent': 'Test-Agent',
+                    'Referer': 'https://test.com'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                logTo('http-log', '✅ fetch API头设置成功', 'success')
+                logTo('http-log', `返回头: ${JSON.stringify(data.headers)}`, 'info')
+            })
+            .catch(error => {
+                logTo('http-log', `❌ fetch API失败: ${error.message}`, 'error')
+            })
+        }
+        
+        function resetTestData() {
+            clearLog('reset-log')
+            
+            // 恢复默认基金
+            const defaultFunds = [
+                { code: '005827', name: '易方达蓝筹精选混合', addedAt: new Date().toISOString() },
+                { code: '161725', name: '招商中证白酒指数', addedAt: new Date().toISOString() },
+                { code: '003095', name: '中欧医疗健康混合', addedAt: new Date().toISOString() }
+            ]
+            
+            localStorage.setItem('fund_stock_show_user_funds', JSON.stringify(defaultFunds))
+            logTo('reset-log', '✅ 重置为默认基金', 'success')
+            
+            // 触发更新
+            window.dispatchEvent(new StorageEvent('storage', {
+                key: 'fund_stock_show_user_funds',
+                newValue: JSON.stringify(defaultFunds)
+            }))
+            logTo('reset-log', '✅ 触发storage事件', 'success')
+        }
+        
+        // 监听storage事件
+        window.addEventListener('storage', function(event) {
+            console.log('📦 storage事件触发:', event.key, event.newValue)
+        })
+        
+        // 初始化
+        window.addEventListener('load', function() {
+            logTo('localstorage-log', '页面加载完成', 'info')
+            checkLocalStorage()
+        })
+    </script>
+</body>
+</html>

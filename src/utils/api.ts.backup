@@ -4,13 +4,11 @@ import { fetchRealFundData, fetchRealStockData, initDataService, getUpdateInfo, 
 import { fetchAccurateFundData, getFundDetail, getDataSourceStatus, clearFundCache } from '../services/accurateFundService'
 import { calculateFundValuationByPortfolio, calculateMultipleFundValuations, compareValuationMethods, getPortfolioServiceStatus } from '../services/fundPortfolioService'
 import { fetchFundsWithProxy, checkProxyHealth } from '../services/proxyApiService'
-import { getRealFundHoldings, getSinaStockPrice, estimateFundValuation, getCompleteFundData } from "../services/realFundHoldingsService"
 
 // 重新导出数据服务函数
 export { initDataService, getUpdateInfo, clearCache }
 export { fetchAccurateFundData, getFundDetail, getDataSourceStatus, clearFundCache }
 export { calculateFundValuationByPortfolio, calculateMultipleFundValuations, compareValuationMethods, getPortfolioServiceStatus }
-export { getRealFundHoldings, getSinaStockPrice, estimateFundValuation, getCompleteFundData }
 
 // 获取市场状态
 export const getMarketStatus = () => {

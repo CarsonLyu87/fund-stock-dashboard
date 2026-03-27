@@ -47,13 +47,13 @@ const HoldingsTable: React.FC<HoldingsTableProps> = ({ holdings, loading = false
       key: 'weight',
       width: 120,
       sorter: (a: any, b: any) => a.weight - b.weight,
-      render: (weight: number) => (
+      render: (weight: number | undefined) => (
         <div>
           <div style={{ textAlign: 'right', marginBottom: 4 }}>
-            {weight.toFixed(2)}%
+            {weight !== undefined ? weight.toFixed(2) + '%' : 'N/A'}
           </div>
           <Progress 
-            percent={weight} 
+            percent={weight || 0} 
             size="small" 
             showInfo={false}
             strokeColor="#1890ff"

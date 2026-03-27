@@ -240,7 +240,7 @@ function App() {
               <div style={{ fontSize: 24, textAlign: 'center' }}>
                 <span style={{ color: '#3f8600' }}>{risingFunds}</span>
                 <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>
-                  ({((risingFunds / totalFunds) * 100).toFixed(1)}%)
+                  ({totalFunds > 0 ? ((risingFunds / totalFunds) * 100).toFixed(1) + '%' : '0%'})
                 </span>
               </div>
             </Card>
@@ -250,7 +250,7 @@ function App() {
               <div style={{ fontSize: 24, textAlign: 'center' }}>
                 <span style={{ color: '#3f8600' }}>{risingStocks}</span>
                 <span style={{ fontSize: 14, color: '#666', marginLeft: 8 }}>
-                  ({((risingStocks / totalStocks) * 100).toFixed(1)}%)
+                  ({totalStocks > 0 ? ((risingStocks / totalStocks) * 100).toFixed(1) + '%' : '0%'})
                 </span>
               </div>
             </Card>

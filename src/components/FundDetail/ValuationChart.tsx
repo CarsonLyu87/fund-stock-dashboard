@@ -67,7 +67,7 @@ const ValuationChart: React.FC<ValuationChartProps> = ({ valuation }) => {
         }}>
           <p style={{ margin: 0, fontWeight: 'bold' }}>{payload[0].payload.name}</p>
           <p style={{ margin: 0, color: payload[0].value > 0 ? '#cf1322' : '#3f8600' }}>
-            贡献度: {payload[0].value > 0 ? '+' : ''}{payload[0].value.toFixed(3)}%
+            贡献度: {payload[0].value > 0 ? '+' : ''}{payload[0].value !== undefined ? payload[0].value.toFixed(3) + '%' : 'N/A'}
           </p>
         </div>
       )
@@ -88,7 +88,7 @@ const ValuationChart: React.FC<ValuationChartProps> = ({ valuation }) => {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                  label={({ name, percent }) => `${name}: ${percent !== undefined ? (percent * 100).toFixed(1) + '%' : 'N/A'}`}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
@@ -98,7 +98,7 @@ const ValuationChart: React.FC<ValuationChartProps> = ({ valuation }) => {
                   ))}
                 </Pie>
                 <Tooltip 
-                  formatter={(value: number) => [`${value.toFixed(3)}%`, '贡献度']}
+                  formatter={(value: number) => [`${value !== undefined ? value.toFixed(3) + '%' : 'N/A'}`, '贡献度']}
                 />
                 <Legend />
               </PieChart>
@@ -117,7 +117,7 @@ const ValuationChart: React.FC<ValuationChartProps> = ({ valuation }) => {
               color: valuation.estimatedChangePercent > 0 ? '#cf1322' : '#3f8600',
               marginLeft: 8
             }}>
-              {valuation.estimatedChangePercent > 0 ? '+' : ''}{valuation.estimatedChangePercent.toFixed(2)}%
+              {valuation.estimatedChangePercent > 0 ? '+' : ''}{valuation.estimatedChangePercent !== undefined ? valuation.estimatedChangePercent.toFixed(2) + '%' : 'N/A'}
             </span>
           </div>
         </Card>
@@ -156,7 +156,7 @@ const ValuationChart: React.FC<ValuationChartProps> = ({ valuation }) => {
                   <LabelList 
                     dataKey="contribution" 
                     position="top"
-                    formatter={(value: number) => value.toFixed(2)}
+                    formatter={(value: number) => value !== undefined ? value.toFixed(2) : "N/A"}
                     style={{ fontSize: '10px' }}
                   />
                 </Bar>
@@ -198,11 +198,11 @@ const ValuationChart: React.FC<ValuationChartProps> = ({ valuation }) => {
                     color: valuation.weightedChange > 0 ? '#cf1322' : '#3f8600',
                     fontWeight: 'bold'
                   }}>
-                    {valuation.weightedChange > 0 ? '+' : ''}{valuation.weightedChange.toFixed(3)}%
+                    {valuation.weightedChange > 0 ? '+' : ''}{valuation.weightedChange !== undefined ? valuation.weightedChange.toFixed(3) + '%' : 'N/A'}
                   </td>
                   <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #d9d9d9' }}>
                     {Math.abs(valuation.weightedChange) > 0 ? 
-                      ((Math.abs(valuation.weightedChange) / Math.abs(valuation.estimatedChangePercent)) * 100).toFixed(1) + '%' : 
+                      (valuation.estimatedChangePercent !== undefined ? (Math.abs(valuation.weightedChange) / Math.abs(valuation.estimatedChangePercent) * 100).toFixed(1) : "N/A" + '%' : 
                       '0%'
                     }
                   </td>
@@ -218,11 +218,11 @@ const ValuationChart: React.FC<ValuationChartProps> = ({ valuation }) => {
                     border: '1px solid #d9d9d9',
                     color: valuation.cashContribution > 0 ? '#cf1322' : '#3f8600'
                   }}>
-                    {valuation.cashContribution > 0 ? '+' : ''}{valuation.cashContribution.toFixed(3)}%
+                    {valuation.cashContribution > 0 ? '+' : ''}{valuation.cashContribution !== undefined ? valuation.cashContribution.toFixed(3) + '%' : 'N/A'}
                   </td>
                   <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #d9d9d9' }}>
                     {Math.abs(valuation.cashContribution) > 0 ? 
-                      ((Math.abs(valuation.cashContribution) / Math.abs(valuation.estimatedChangePercent)) * 100).toFixed(1) + '%' : 
+                      (valuation.estimatedChangePercent !== undefined ? (Math.abs(valuation.cashContribution) / Math.abs(valuation.estimatedChangePercent) * 100).toFixed(1) : "N/A" + '%' : 
                       '0%'
                     }
                   </td>
@@ -238,11 +238,11 @@ const ValuationChart: React.FC<ValuationChartProps> = ({ valuation }) => {
                     border: '1px solid #d9d9d9',
                     color: valuation.otherContribution > 0 ? '#cf1322' : '#3f8600'
                   }}>
-                    {valuation.otherContribution > 0 ? '+' : ''}{valuation.otherContribution.toFixed(3)}%
+                    {valuation.otherContribution > 0 ? '+' : ''}{valuation.otherContribution !== undefined ? valuation.otherContribution.toFixed(3) + '%' : 'N/A'}
                   </td>
                   <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #d9d9d9' }}>
                     {Math.abs(valuation.otherContribution) > 0 ? 
-                      ((Math.abs(valuation.otherContribution) / Math.abs(valuation.estimatedChangePercent)) * 100).toFixed(1) + '%' : 
+                      (valuation.estimatedChangePercent !== undefined ? (Math.abs(valuation.otherContribution) / Math.abs(valuation.estimatedChangePercent) * 100).toFixed(1) : "N/A" + '%' : 
                       '0%'
                     }
                   </td>
@@ -259,7 +259,7 @@ const ValuationChart: React.FC<ValuationChartProps> = ({ valuation }) => {
                     color: valuation.estimatedChangePercent > 0 ? '#cf1322' : '#3f8600',
                     fontWeight: 'bold'
                   }}>
-                    {valuation.estimatedChangePercent > 0 ? '+' : ''}{valuation.estimatedChangePercent.toFixed(3)}%
+                    {valuation.estimatedChangePercent > 0 ? '+' : ''}{valuation.estimatedChangePercent !== undefined ? valuation.estimatedChangePercent.toFixed(3) + '%' : 'N/A'}
                   </td>
                   <td style={{ padding: '8px', textAlign: 'right', border: '1px solid #d9d9d9', fontWeight: 'bold' }}>
                     100%

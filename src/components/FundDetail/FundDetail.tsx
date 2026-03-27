@@ -115,11 +115,11 @@ const FundDetail: React.FC<FundDetailProps> = ({ fundCode, fundName, onClose }) 
       dataIndex: 'weight',
       key: 'weight',
       width: 100,
-      render: (weight: number) => (
+      render: (weight: number | undefined) => (
         <div style={{ textAlign: 'right' }}>
-          <div>{(weight || 0).toFixed(2)}%</div>
+          <div>{weight !== undefined ? weight.toFixed(2) + '%' : 'N/A'}</div>
           <Progress 
-            percent={weight} 
+            percent={weight || 0} 
             size="small" 
             showInfo={false}
             strokeColor="#1890ff"

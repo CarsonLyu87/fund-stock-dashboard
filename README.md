@@ -8,7 +8,8 @@
 - **自动更新**：每30秒自动刷新数据
 - **数据可视化**：使用 Recharts 绘制精美图表
 - **响应式设计**：完美适配桌面和移动设备
-- **模拟数据**：内置模拟数据，可轻松接入真实API
+- **多数据源支持**：AKshare + 东方财富API双数据源
+- **自动降级机制**：API失败时自动使用模拟数据
 - **部署友好**：支持 Vercel、Netlify、GitHub Pages 等平台
 
 ## 🚀 快速开始
@@ -135,6 +136,50 @@ MIT License
 ## 📞 联系
 
 如有问题或建议，请通过 GitHub Issues 联系。
+
+## 📊 数据源架构
+
+项目采用多数据源架构，确保数据的高可用性：
+
+### 数据源优先级
+
+1. **AKshare数据源**（基金数据优先）
+   - 通过Python桥接脚本调用akshare库
+   - 提供准确的基金净值数据
+   - 需要安装：`pip install akshare pandas`
+
+2. **东方财富API**（股票数据优先）
+   - 实时股票行情数据
+   - 基金实时估算数据
+   - 免费无限制使用
+
+3. **模拟数据**（降级方案）
+   - API失败时自动切换
+   - 确保应用始终可用
+
+### 自动降级机制
+
+系统会自动检测数据源可用性，按以下顺序降级：
+
+**基金数据**：AKshare → 东方财富API → 模拟数据  
+**股票数据**：东方财富API → 模拟数据
+
+### 验证数据源
+
+```bash
+# 测试AKshare是否可用
+python3 test_akshare.py
+
+# 测试桥接脚本
+python3 akshare_bridge.py funds '{"codes": ["005827"]}'
+```
+
+### 技术架构
+
+- `akshare_bridge.py` - Python桥接脚本
+- `src/services/akshareDataService.ts` - AKshare数据服务
+- `src/services/newDataService.ts` - 主数据服务（整合多数据源）
+- `src/utils/newApi.ts` - 兼容现有接口
 
 ---
 

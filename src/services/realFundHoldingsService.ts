@@ -90,46 +90,130 @@ export async function getRealFundHoldings(code: string, name: string): Promise<F
  */
 function parseTiantianHoldingsHTML(code: string, name: string, html: string): FundHoldings | null {
   try {
-    // 提取JSON数据（天天基金返回的是包含JSON的JavaScript）
-    const jsonMatch = html.match(/var apidata=\s*({.*?});/)
+    console.log('🔍 解析天天基金HTML持仓数据')
     
-    if (!jsonMatch) {
+    // 提取JavaScript对象（天天基金返回的是JavaScript代码，不是纯JSON）
+    const jsMatch = html.match(/var apidata=\s*({.*?});/)
+    
+    if (!jsMatch) {
       console.warn('未找到持仓数据')
       return null
     }
     
-    const data = JSON.parse(jsonMatch[1])
+    const jsCode = jsMatch[1]
     
-    if (!data || !data.quarterInfos || data.quarterInfos.length === 0) {
-      console.warn('持仓数据为空')
-      return null
+    // 尝试直接解析HTML内容
+    const contentMatch = jsCode.match(/content:\s*"([^"]*?)"/)
+    if (contentMatch) {
+      const htmlContent = contentMatch[1].replace(/\\"/g, '"').replace(/\\'/g, "'")
+      console.log(`📄 提取到HTML内容，长度: ${htmlContent.length} 字符`)
+      
+      const result = parseHoldingsFromHTML(code, name, htmlContent)
+      if (result) {
+        console.log(`✅ 成功解析 ${result.stockList.length} 只持仓股票`)
+        return result
+      }
     }
     
-    // 获取最新季度的持仓数据
-    const latestQuarter = data.quarterInfos[0]
-    const stockList = latestQuarter.stockList || []
+    return null
     
-    if (stockList.length === 0) {
-      console.warn('股票持仓列表为空')
-      return null
+  } catch (error) {
+    console.error('解析持仓HTML失败:', error)
+    return null
+  }
+}
+
+/**
+ * 从HTML表格中解析持仓数据
+ */
+function parseHoldingsFromHTML(code: string, name: string, html: string): FundHoldings | null {
+  try {
+    console.log('📊 从HTML解析持仓数据')
+    
+    // 使用更简单的解析方法：直接查找表格行
+    const rows = html.split('</tr>')
+    
+    const holdings: StockHolding[] = []
+    let foundTable = false
+    
+    for (const row of rows) {
+      // 检查是否进入表格区域
+      if (row.includes('w782 comm tzxq')) {
+        foundTable = true
+        continue
+      }
+      
+      if (!foundTable) continue
+      
+      // 跳过表头
+      if (row.includes('<th') || row.includes('序号')) continue
+      
+      // 解析股票代码
+      const codeMatch = row.match(/\/unify\/r\/(\d+\.\d+)/)
+      if (!codeMatch) continue
+      
+      const marketCode = codeMatch[1] // 如: 1.603259
+      const stockCode = marketCode.split('.')[1] // 提取纯数字代码
+      
+      // 解析股票名称
+      const nameMatch = row.match(/<a[^>]*>([^<]+)<\/a>/g)
+      let stockName = ''
+      if (nameMatch && nameMatch.length > 1) {
+        // 第二个链接通常是股票名称
+        const nameLink = nameMatch[1]
+        const nameTextMatch = nameLink.match(/<a[^>]*>([^<]+)<\/a>/)
+        stockName = nameTextMatch ? nameTextMatch[1] : ''
+      }
+      
+      // 解析持仓比例 - 查找包含百分比的td
+      const weightMatch = row.match(/>([\d.]+)%</)
+      const weight = weightMatch ? parseFloat(weightMatch[1]) : 0
+      
+      // 解析持股数量（万股）和持仓市值（万元）
+      const numberMatches = row.match(/>([\d,]+\.?\d*)</g)
+      let shares = 0
+      let marketValue = 0
+      
+      if (numberMatches && numberMatches.length >= 2) {
+        // 倒数第二个通常是持股数量
+        const sharesStr = numberMatches[numberMatches.length - 2].replace(/[>,]/g, '')
+        shares = parseFloat(sharesStr) || 0
+        
+        // 倒数第一个通常是持仓市值
+        const marketValueStr = numberMatches[numberMatches.length - 1].replace(/[>,]/g, '')
+        marketValue = parseFloat(marketValueStr) || 0
+      }
+      
+      if (weight > 0 && stockCode) {
+        holdings.push({
+          code: stockCode,
+          name: stockName || `股票${stockCode}`,
+          weight,
+          shares,
+          marketValue
+        })
+        
+        // 只取前10只重仓股（通常足够）
+        if (holdings.length >= 10) break
+      }
     }
     
-    // 转换为标准格式
-    const holdings: StockHolding[] = stockList.map((stock: any) => ({
-      code: stock.stockCode,
-      name: stock.stockName,
-      weight: parseFloat(stock.percent) || 0,
-      shares: parseFloat(stock.haveNum) || 0,
-      marketValue: parseFloat(stock.haveMoney) || 0
-    })).filter((stock: StockHolding) => stock.weight > 0)
+    if (holdings.length === 0) {
+      console.warn('未解析到有效的持仓数据')
+      return null
+    }
     
     // 计算总权重
     const totalWeight = holdings.reduce((sum, stock) => sum + stock.weight, 0)
     
+    // 提取报告日期
+    const dateMatch = html.match(/截止至：[^>]*>([\d-]+)</)
+    const reportDate = dateMatch ? dateMatch[1] : new Date().toISOString().split('T')[0]
+    
     return {
       fundCode: code,
       fundName: name,
-      reportDate: latestQuarter.reportDate || new Date().toISOString().split('T')[0],
+      reportDate,
       totalStocks: holdings.length,
       totalWeight,
       stockList: holdings,
@@ -138,7 +222,7 @@ function parseTiantianHoldingsHTML(code: string, name: string, html: string): Fu
     }
     
   } catch (error) {
-    console.error('解析持仓HTML失败:', error)
+    console.error('从HTML解析持仓数据失败:', error)
     return null
   }
 }

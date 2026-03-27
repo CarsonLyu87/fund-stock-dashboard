@@ -6,7 +6,7 @@ import UnifiedFundManager from './components/UnifiedFundManager'
 import StockChart from './components/StockChart'
 import DataAccuracyInfo from './components/DataAccuracyInfo'
 import type { Fund, StockData } from './types/index'
-import { fetchFundData, fetchStockData, initDataService, getMarketStatus, getFormattedLastUpdateTime } from './utils/api'
+import { fetchFundData, fetchStockData, initDataService, getMarketStatus, getFormattedLastUpdateTime } from './utils/newApi'
 
 const { Header, Content } = Layout
 

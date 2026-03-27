@@ -1,0 +1,33 @@
+{
+  "name": "fund-stock-show",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "./build-wrapper.sh",
+    "build:direct": "vite build",
+    "preview": "vite preview",
+    "proxy": "node proxy-server.js",
+    "dev:full": "concurrently \"npm run dev\" \"npm run proxy\""
+  },
+  "dependencies": {
+    "@ant-design/icons": "^6.1.0",
+    "antd": "^6.3.4",
+    "axios": "^1.13.6",
+    "date-fns": "^3.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "recharts": "^2.15.4"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.0.0",
+    "concurrently": "^8.2.2",
+    "cors": "^2.8.6",
+    "express": "^4.22.1",
+    "typescript": "^5.0.0",
+    "vite": "5.4.21"
+  }
+}

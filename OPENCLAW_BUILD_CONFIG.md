@@ -1,195 +1,181 @@
-# OpenClaw控制UI构建配置
+# OpenClaw构建配置指南
 
-## 紧急问题修复
-
-OpenClaw控制UI报告：
+## 问题
+OpenClaw控制UI报告构建错误：
 ```
 sh: line 1: vite: command not found
 Error: Command "vite build" exited with 127
 ```
 
-## 问题原因
-
+## 原因分析
 OpenClaw执行环境中，`node_modules/.bin`目录不在PATH环境变量中，导致直接调用`vite`命令失败。
 
 ## 解决方案
 
-### 方案A: 修改OpenClaw构建命令（立即生效）
-
-**在OpenClaw控制UI中，将构建命令从：**
+### 方案1：使用专用构建脚本（推荐）
 ```
-vite build
+cd /Users/carson/.openclaw/workspace/fund-stock-dashboard && ./build
 ```
 
-**改为以下任一选项：**
-
-#### 选项1: 使用项目构建包装器（推荐）
+或直接使用绝对路径：
 ```
-cd /Users/carson/.openclaw/workspace/fund-stock-show && ./build
-```
-或
-```
-/Users/carson/.openclaw/workspace/fund-stock-show/build
+/Users/carson/.openclaw/workspace/fund-stock-dashboard/build
 ```
 
-#### 选项2: 使用npm脚本
+### 方案2：使用npm脚本
 ```
-cd /Users/carson/.openclaw/workspace/fund-stock-show && npm run build
-```
-
-#### 选项3: 使用npx
-```
-cd /Users/carson/.openclaw/workspace/fund-stock-show && npx vite build
+cd /Users/carson/.openclaw/workspace/fund-stock-dashboard && npm run build
 ```
 
-#### 选项4: 使用绝对路径
+### 方案3：使用npx
 ```
-/Users/carson/.openclaw/workspace/fund-stock-show/node_modules/.bin/vite build
-```
-
-### 方案B: 创建OpenClaw配置文件
-
-如果OpenClaw支持配置文件，请创建以下配置：
-
-```yaml
-# openclaw-project-config.yaml
-project:
-  name: fund-stock-show
-  path: /Users/carson/.openclaw/workspace/fund-stock-show
-  build_command: "./build"
-  # 或使用:
-  # build_command: "npm run build"
-  # build_command: "npx vite build"
+cd /Users/carson/.openclaw/workspace/fund-stock-dashboard && npx vite build
 ```
 
-### 方案C: 环境变量设置
+## 可用的构建命令
 
-在OpenClaw环境中设置：
+### 1. 主构建脚本 (`./build`)
 ```bash
-export PATH=/Users/carson/.openclaw/workspace/fund-stock-show/node_modules/.bin:$PATH
-```
-然后执行：`vite build`
-
-## 已创建的构建解决方案
-
-### 1. `build` - 构建命令包装器
-```bash
-# 位置: /Users/carson/.openclaw/workspace/fund-stock-show/build
-# 权限: 可执行 (chmod +x build)
-# 功能: 自动处理所有构建方法
-```
-
-### 2. `vite` - vite命令包装器
-```bash
-# 位置: /Users/carson/.openclaw/workspace/fund-stock-show/vite
-# 功能: 当直接调用vite时自动处理PATH问题
-```
-
-### 3. `build-wrapper.sh` - 通用构建脚本
-```bash
-# 位置: /Users/carson/.openclaw/workspace/fund-stock-show/build-wrapper.sh
-# 功能: 详细的构建过程和错误处理
-```
-
-## 如何找到OpenClaw构建配置
-
-### 步骤1: 登录OpenClaw控制UI
-1. 打开OpenClaw控制UI Web界面
-2. 导航到项目设置
-
-### 步骤2: 查找构建配置
-在项目设置中查找以下字段：
-- `build_command`
-- `build_script`
-- `build_cmd`
-- `command`
-- `script`
-- `build`
-
-### 步骤3: 修改配置
-将现有的`vite build`改为：
-```
-cd /Users/carson/.openclaw/workspace/fund-stock-show && ./build
-```
-
-## 测试验证
-
-### 测试1: 本地测试构建
-```bash
-cd /Users/carson/.openclaw/workspace/fund-stock-show
+# 多方法构建包装器，自动处理环境问题
 ./build
 ```
 
-### 测试2: 测试所有构建方法
+### 2. 简化构建脚本 (`./openclaw-build`)
 ```bash
-# 方法1: 使用包装器
+# 专为OpenClaw优化的构建脚本
+./openclaw-build
+```
+
+### 3. 通用构建包装器 (`./build-wrapper.sh`)
+```bash
+# 详细的构建脚本，包含环境检查和错误处理
+./build-wrapper.sh
+```
+
+## OpenClaw控制UI配置建议
+
+### 推荐配置
+```
+工作目录: /Users/carson/.openclaw/workspace/fund-stock-dashboard
+构建命令: ./build
+```
+
+### 备选配置
+```
+工作目录: /Users/carson/.openclaw/workspace/fund-stock-dashboard
+构建命令: npm run build
+```
+
+### 绝对路径配置
+```
+工作目录: /Users/carson/.openclaw/workspace/fund-stock-dashboard
+构建命令: /Users/carson/.openclaw/workspace/fund-stock-dashboard/build
+```
+
+## 构建脚本功能
+
+### `./build` 脚本特性：
+1. **环境检测**: 自动检查Node.js、npm、npx可用性
+2. **依赖检查**: 自动安装缺失的node_modules
+3. **多方法尝试**: 依次尝试多种构建方法直到成功
+4. **错误处理**: 详细的错误信息和解决方案
+5. **路径处理**: 自动处理PATH环境变量问题
+
+### 构建方法优先级：
+1. `npm run build` (最可靠，npm自动处理PATH)
+2. `npx vite build` (npx自动查找本地依赖)
+3. 直接调用本地vite (处理PATH问题后)
+
+## 验证构建
+
+### 1. 本地测试
+```bash
+cd /Users/carson/.openclaw/workspace/fund-stock-dashboard
 ./build
+```
 
-# 方法2: 使用npm
-npm run build
+### 2. 检查构建结果
+```bash
+ls -la dist/
+```
 
-# 方法3: 使用npx
-npx vite build
+### 3. 验证构建文件
+```bash
+# 检查HTML文件
+head -5 dist/index.html
 
-# 方法4: 直接调用
-./node_modules/.bin/vite build
+# 检查JavaScript文件
+ls -lh dist/assets/*.js | head -3
 ```
 
 ## 故障排除
 
-### 如果仍然失败：
-1. **检查权限**：
-   ```bash
-   chmod +x /Users/carson/.openclaw/workspace/fund-stock-show/build
-   chmod +x /Users/carson/.openclaw/workspace/fund-stock-show/vite
-   ```
+### 问题1: "vite: command not found"
+**原因**: PATH环境变量中缺少`node_modules/.bin`
+**解决方案**: 使用`./build`或`npm run build`
 
-2. **检查依赖**：
-   ```bash
-   cd /Users/carson/.openclaw/workspace/fund-stock-show
-   npm install
-   ```
+### 问题2: 构建超时
+**原因**: 依赖安装或构建过程耗时过长
+**解决方案**: 确保网络连接正常，或使用已有node_modules
 
-3. **检查路径**：
-   ```bash
-   ls -la /Users/carson/.openclaw/workspace/fund-stock-show/build
-   ls -la /Users/carson/.openclaw/workspace/fund-stock-show/node_modules/.bin/vite
-   ```
+### 问题3: 权限问题
+**原因**: 脚本没有执行权限
+**解决方案**: 
+```bash
+chmod +x build openclaw-build build-wrapper.sh
+```
 
-4. **查看详细错误**：
-   ```bash
-   cd /Users/carson/.openclaw/workspace/fund-stock-show
-   ./build-wrapper.sh
-   ```
+### 问题4: 依赖缺失
+**原因**: node_modules目录不存在或损坏
+**解决方案**: 构建脚本会自动安装依赖
 
-## 技术说明
+## 部署到GitHub Pages
 
-### 为什么`vite`命令找不到？
-- 在Unix/Linux系统中，可执行文件需要在PATH环境变量中
-- `node_modules/.bin/vite`是本地安装的vite命令
-- npm运行时自动将`node_modules/.bin`添加到PATH
-- 直接执行`vite`命令时，PATH中没有这个目录
+### 方法1: 使用gh-pages
+```bash
+npx gh-pages -d dist
+```
 
-### OpenClaw环境特点
-- 可能在不同的用户或环境上下文中执行
-- PATH环境变量可能不包含用户本地目录
-- 可能需要绝对路径或环境设置
+### 方法2: 手动部署
+```bash
+# 创建gh-pages分支
+git checkout --orphan gh-pages
+git rm -rf .
+cp -r dist/* .
+git add .
+git commit -m "Deploy to GitHub Pages"
+git push origin gh-pages --force
+```
+
+## 监控构建状态
+
+### 成功标志
+- ✅ 构建完成无错误
+- ✅ dist/目录包含index.html和assets/
+- ✅ 控制台显示"构建成功完成"
+
+### 失败处理
+1. 检查错误信息
+2. 验证node_modules是否存在
+3. 检查网络连接
+4. 查看详细日志
 
 ## 联系支持
 
-如果问题仍然存在，请提供：
-1. OpenClaw控制UI的完整错误信息
-2. 当前配置的构建命令
-3. OpenClaw版本信息
-4. 操作系统和环境信息
+如果构建问题持续存在，请：
+1. 提供完整的错误信息
+2. 说明使用的构建命令
+3. 提供项目目录结构
+4. 检查OpenClaw控制UI的构建配置
 
-## 相关链接
-- GitHub仓库: https://github.com/CarsonLyu87/fund-stock-show
-- GitHub Pages: https://CarsonLyu87.github.io/fund-stock-show/
-- 最新提交: https://github.com/CarsonLyu87/fund-stock-show/commit/e4ac45ff
+## 更新记录
 
-## 更新历史
-- 2026-03-26: 创建OpenClaw专用构建配置说明
-- 2026-03-26: 添加CORS代理支持，解决API跨域问题
-- 2026-03-26: 修复基金添加状态同步问题
-- 2026-03-26: 解决HTTP头安全问题
+### 2026-03-27
+- 创建OpenClaw专用构建脚本
+- 解决"vite: command not found"问题
+- 添加多方法构建策略
+- 完善错误处理和日志
+
+---
+
+**重要**: 在OpenClaw控制UI中，请将构建命令配置为`./build`而不是`vite build`。

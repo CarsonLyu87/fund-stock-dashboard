@@ -12,12 +12,12 @@ import {
   LineChartOutlined
 } from '@ant-design/icons'
 import type { Fund } from '../types/index'
-import type { FundSearchResult, UserFundConfig } from '../services/fundSearchService'
+import type { FundSearchResult, UserFundConfig } from "../services/unifiedAkshareService"'
 import { 
   searchFunds, addFundToUserList, removeFundFromUserList, 
   getUserFunds, getSearchHistory, clearSearchHistory,
   exportUserFunds, importUserFunds, updateFundNote, getFundNote
-} from '../services/fundSearchService'
+} from "../services/unifiedAkshareService"'
 import { fetchFundData } from '../utils/api'
 import FundDetail from './FundDetail/FundDetail'
 

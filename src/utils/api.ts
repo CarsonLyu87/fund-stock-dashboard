@@ -1,39 +1,58 @@
-import axios from 'axios'
+/**
+ * AKShare API 模块
+ * 使用 AKShare 作为唯一数据源，提供稳定可靠的基金和股票数据
+ */
+
 import type { Fund, StockData } from '../types'
-import { fetchRealFundData, fetchRealStockData, initDataService, getUpdateInfo, clearCache } from '../services/realDataService'
-import { fetchAccurateFundData, getFundDetail, getDataSourceStatus, clearFundCache } from '../services/accurateFundService'
-import { calculateFundValuationByPortfolio, calculateMultipleFundValuations, compareValuationMethods, getPortfolioServiceStatus } from '../services/fundPortfolioService'
-import { fetchFundsWithProxy, checkProxyHealth } from '../services/proxyApiService'
-import { getRealFundHoldings, getSinaStockPrice, estimateFundValuation, getCompleteFundData } from "../services/realFundHoldingsService"
+import { 
+  initDataService, 
+  fetchFundData as fetchAkshareFundData, 
+  fetchStockData as fetchAkshareStockData, 
+  getUpdateInfo,
+  clearCache,
+  getDataSourceStatus,
+  getMarketStatus as getAkshareMarketStatus,
+  getFundDetail,
+  searchFunds
+} from "../services/unifiedAkshareService"'
 
 // 重新导出数据服务函数
-export { initDataService, getUpdateInfo, clearCache }
-export { fetchAccurateFundData, getFundDetail, getDataSourceStatus, clearFundCache }
-export { calculateFundValuationByPortfolio, calculateMultipleFundValuations, compareValuationMethods, getPortfolioServiceStatus }
-export { getRealFundHoldings, getSinaStockPrice, estimateFundValuation, getCompleteFundData }
+export { 
+  initDataService, 
+  getUpdateInfo, 
+  clearCache, 
+  getDataSourceStatus,
+  getFundDetail,
+  searchFunds
+}
 
 // 获取市场状态
 export const getMarketStatus = () => {
-  const now = new Date()
-  const hour = now.getHours()
-  const isWeekend = now.getDay() === 0 || now.getDay() === 6
-  
-  // A股交易时间：周一至周五 9:30-11:30, 13:00-15:00
-  const isTradingHours = !isWeekend && (
-    (hour >= 9 && hour < 11) || 
-    (hour === 11 && now.getMinutes() < 30) ||
-    (hour >= 13 && hour < 15)
-  )
-  
-  return {
-    isOpen: isTradingHours,
-    openTime: '09:30',
-    closeTime: '15:00',
-    nextOpenTime: isWeekend ? '下周一 09:30' : '明日 09:30'
+  try {
+    return getAkshareMarketStatus()
+  } catch (error) {
+    console.warn('获取市场状态失败，使用默认状态:', error)
+    
+    // 默认市场状态
+    const now = new Date()
+    const hour = now.getHours()
+    const isWeekend = now.getDay() === 0 || now.getDay() === 6
+    
+    // A股交易时间：周一至周五 9:30-11:30, 13:00-15:00
+    const isTradingHours = !isWeekend && (
+      (hour >= 9 && hour < 11) || 
+      (hour === 11 && now.getMinutes() < 30) ||
+      (hour >= 13 && hour < 15)
+    )
+    
+    return {
+      isOpen: isTradingHours,
+      openTime: '09:30',
+      closeTime: '15:00',
+      nextOpenTime: isWeekend ? '下周一 09:30' : '明日 09:30'
+    }
   }
 }
-
-
 
 // 获取用户基金列表
 const getUserFundCodes = (): string[] => {
@@ -50,193 +69,89 @@ const getUserFundCodes = (): string[] => {
     console.error('获取用户基金列表失败:', error)
   }
   
-  // 默认基金列表
+  // 默认基金列表（使用AKShare支持的基金）
   return [
     '005827', '161725', '003095', '110022', '519674',
     '260108', '000404', '001714', '000248', '001475'
   ]
 }
 
-// 获取基金数据 - 优先使用代理服务器避免CORS问题
-export const fetchFundData = async (): Promise<Fund[]> => {
-  console.log('📊 获取基金数据（优先使用代理服务器避免CORS）...')
+// 获取用户股票列表
+const getUserStockCodes = (): string[] => {
+  try {
+    // 尝试从localStorage获取用户股票配置
+    const stored = localStorage.getItem('fund_stock_show_user_stocks')
+    if (stored) {
+      const userStocks = JSON.parse(stored)
+      if (Array.isArray(userStocks) && userStocks.length > 0) {
+        return userStocks.map((stock: any) => stock.code)
+      }
+    }
+  } catch (error) {
+    console.error('获取用户股票列表失败:', error)
+  }
   
-  // 使用用户配置的基金代码列表
-  const userFundCodes = getUserFundCodes()
-  console.log(`📋 用户基金列表: ${userFundCodes.length} 只基金`, userFundCodes)
+  // 默认股票列表（使用AKShare支持的A股）
+  return [
+    '600519', '000858', '000333', '000001', '600036',
+    '000002', '601318', '600276', '600887', '000651'
+  ]
+}
+
+// 主函数：获取基金数据
+export const fetchFundData = async (): Promise<Fund[]> => {
+  console.log('📊 通过AKShare获取基金数据...')
   
   try {
-    // 1. 首先尝试使用代理服务器
-    console.log('🔍 步骤1: 尝试使用代理服务器...')
-    try {
-      const proxyFunds = await fetchFundsWithProxy(userFundCodes)
-      if (proxyFunds.length > 0) {
-        console.log(`✅ 通过代理获取 ${proxyFunds.length} 只基金数据`)
-        
-        // 对于支持持仓计算的基金，尝试获取持仓估值
-        const portfolioServiceStatus = getPortfolioServiceStatus()
-        const supportedPortfolioFunds = portfolioServiceStatus.supportedFunds
-        
-        if (supportedPortfolioFunds.length > 0) {
-          console.log('🔍 为支持持仓计算的基金添加持仓估值...')
-          
-          // 创建基础净值映射
-          const baseNetValues: Record<string, number> = {}
-          proxyFunds.forEach(fund => {
-            baseNetValues[fund.code] = fund.currentPrice
-          })
-          
-          // 批量计算持仓估值
-          const portfolioValuations = await calculateMultipleFundValuations(
-            supportedPortfolioFunds,
-            baseNetValues
-          )
-          
-          // 合并数据
-          const enhancedFunds = proxyFunds.map(fund => {
-            const portfolioValuation = portfolioValuations.find(v => v.fundCode === fund.code)
-            
-            if (portfolioValuation) {
-              return {
-                ...fund,
-                portfolioCalculatedValue: portfolioValuation.calculatedValue,
-                portfolioCalculatedChangePercent: portfolioValuation.calculatedChangePercent,
-                portfolioConfidence: portfolioValuation.confidence,
-                portfolioStockCount: portfolioValuation.stockDetails.length,
-                valuationDifference: fund.estimatedValue && fund.estimatedChangePercent
-                  ? Math.abs(portfolioValuation.calculatedChangePercent - fund.estimatedChangePercent)
-                  : 0,
-                dataSources: [...(fund.dataSources || []), 'portfolio_calculation']
-              } as Fund & {
-                portfolioCalculatedValue?: number
-                portfolioCalculatedChangePercent?: number
-                portfolioConfidence?: number
-                portfolioStockCount?: number
-                valuationDifference?: number
-              }
-            }
-            
-            return fund
-          })
-          
-          console.log(`📊 持仓估值覆盖: ${portfolioValuations.length}/${proxyFunds.length} 只基金`)
-          return enhancedFunds as Fund[]
-        }
-        
-        return proxyFunds
-      }
-    } catch (proxyError) {
-      console.warn('⚠️ 代理服务器获取失败，降级到直接API:', proxyError.message)
+    // 使用用户配置的基金代码列表
+    const userFundCodes = getUserFundCodes()
+    console.log(`📋 用户基金列表: ${userFundCodes.length} 只基金`, userFundCodes)
+    
+    // 调用AKShare数据服务
+    const funds = await fetchAkshareFundData(userFundCodes)
+    
+    if (funds.length === 0) {
+      console.warn('AKShare返回空数据，使用模拟数据')
+      return generateMockFunds()
     }
     
-    // 2. 代理失败，降级到直接获取准确数据
-    console.log('🔍 步骤2: 降级到直接获取准确数据...')
-    const accurateFunds = await fetchAccurateFundData()
-    console.log(`📈 准确数据获取结果: ${accurateFunds.length} 只基金`)
-    
-    if (accurateFunds.length === 0) {
-      console.warn('准确数据服务无数据，降级到实时估值数据...')
-      const realFunds = await fetchRealFundData()
-      console.log(`使用实时估值数据: ${realFunds.length} 只基金`)
-      return realFunds
-    }
-    
-    console.log(`✅ 获取 ${accurateFunds.length} 只基金的准确数据`)
-    
-    // 2. 对于支持持仓计算的基金，尝试获取持仓估值
-    const portfolioServiceStatus = getPortfolioServiceStatus()
-    const supportedPortfolioFunds = portfolioServiceStatus.supportedFunds
-    
-    // 创建基础净值映射
-    const baseNetValues: Record<string, number> = {}
-    accurateFunds.forEach(fund => {
-      baseNetValues[fund.code] = fund.currentPrice
-    })
-    
-    // 批量计算持仓估值
-    const portfolioValuations = await calculateMultipleFundValuations(
-      supportedPortfolioFunds,
-      baseNetValues
-    )
-    
-    // 3. 合并数据
-    const enhancedFunds = accurateFunds.map(fund => {
-      // 查找是否有持仓估值
-      const portfolioValuation = portfolioValuations.find(v => v.fundCode === fund.code)
-      
-      if (portfolioValuation) {
-        // 创建增强的基金数据
-        return {
-          ...fund,
-          // 添加持仓估值信息
-          portfolioCalculatedValue: portfolioValuation.calculatedValue,
-          portfolioCalculatedChangePercent: portfolioValuation.calculatedChangePercent,
-          portfolioConfidence: portfolioValuation.confidence,
-          portfolioStockCount: portfolioValuation.stockDetails.length,
-          // 计算估值差异
-          valuationDifference: fund.estimatedValue > 0 
-            ? Math.abs(portfolioValuation.calculatedChangePercent - fund.estimatedChangePercent)
-            : 0,
-          // 标记数据来源
-          dataSources: [
-            'official_net_value',
-            'api_estimate',
-            'portfolio_calculation'
-          ]
-        } as Fund & {
-          portfolioCalculatedValue?: number
-          portfolioCalculatedChangePercent?: number
-          portfolioConfidence?: number
-          portfolioStockCount?: number
-          valuationDifference?: number
-          dataSources?: string[]
-        }
-      }
-      
-      return fund
-    })
-    
-    // 统计持仓估值覆盖情况
-    const portfolioCoverage = portfolioValuations.length
-    console.log(`📊 持仓估值覆盖: ${portfolioCoverage}/${accurateFunds.length} 只基金`)
-    
-    if (portfolioCoverage > 0) {
-      console.log('🎯 持仓估值计算完成，数据已增强')
-    }
-    
-    return enhancedFunds as Fund[]
+    console.log(`✅ 通过AKShare获取 ${funds.length} 只基金数据`)
+    return funds
     
   } catch (error) {
     console.error('获取基金数据失败:', error)
     
-    // 降级策略
-    try {
-      console.warn('尝试使用基础数据服务...')
-      const realFunds = await fetchRealFundData()
-      if (realFunds.length > 0) {
-        console.log(`使用基础数据: ${realFunds.length} 只基金`)
-        return realFunds
-      }
-    } catch (fallbackError) {
-      console.error('基础数据服务也失败:', fallbackError)
-    }
-    
-    // 最后降级到模拟数据
+    // 降级到模拟数据
     console.warn('降级到模拟数据...')
     return generateMockFunds()
   }
 }
 
-// 获取股票数据 - 使用真实数据服务
+// 主函数：获取股票数据
 export const fetchStockData = async (): Promise<StockData[]> => {
-  console.log('获取股票数据（每15分钟更新）...')
+  console.log('📈 通过AKShare获取股票数据...')
+  
   try {
-    const stocks = await fetchRealStockData()
-    console.log(`成功获取 ${stocks.length} 只股票数据`)
+    // 使用用户配置的股票代码列表
+    const userStockCodes = getUserStockCodes()
+    console.log(`📋 用户股票列表: ${userStockCodes.length} 只股票`, userStockCodes)
+    
+    // 调用AKShare数据服务
+    const stocks = await fetchAkshareStockData(userStockCodes)
+    
+    if (stocks.length === 0) {
+      console.warn('AKShare返回空数据，使用模拟数据')
+      return generateMockStocks()
+    }
+    
+    console.log(`✅ 通过AKShare获取 ${stocks.length} 只股票数据`)
     return stocks
+    
   } catch (error) {
     console.error('获取股票数据失败:', error)
+    
     // 降级到模拟数据
+    console.warn('降级到模拟数据...')
     return generateMockStocks()
   }
 }
@@ -270,7 +185,8 @@ function generateMockFunds(): Fund[] {
       changePercent: parseFloat(changePercent.toFixed(2)),
       changeAmount: parseFloat(changeAmount.toFixed(3)),
       volume: Math.floor(Math.random() * 10000000) + 5000000,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      dataSources: ['mock_data']
     }
   })
 }
@@ -278,21 +194,29 @@ function generateMockFunds(): Fund[] {
 function generateMockStocks(): StockData[] {
   console.log('使用模拟股票数据（降级模式）')
   const stocks = [
-    { symbol: 'sh000001', name: '上证指数' },
-    { symbol: 'sz399001', name: '深证成指' },
-    { symbol: 'sz399006', name: '创业板指' },
-    { symbol: 'sh000300', name: '沪深300' },
-    { symbol: 'sh000016', name: '上证50' },
-    { symbol: 'sz399005', name: '中小板指' }
+    { symbol: '600519', name: '贵州茅台' },
+    { symbol: '000858', name: '五粮液' },
+    { symbol: '000333', name: '美的集团' },
+    { symbol: '000001', name: '平安银行' },
+    { symbol: '600036', name: '招商银行' },
+    { symbol: '000002', name: '万科A' },
+    { symbol: '601318', name: '中国平安' },
+    { symbol: '600276', name: '恒瑞医药' },
+    { symbol: '600887', name: '伊利股份' },
+    { symbol: '000651', name: '格力电器' }
   ]
   
   return stocks.map((stock, index) => {
-    const basePrice = stock.symbol.includes('sh000001') ? 3000 + Math.random() * 200 :
-                     stock.symbol.includes('sz399001') ? 9000 + Math.random() * 1000 :
-                     stock.symbol.includes('sz399006') ? 1800 + Math.random() * 200 :
-                     stock.symbol.includes('sh000300') ? 3500 + Math.random() * 200 :
-                     stock.symbol.includes('sh000016') ? 2500 + Math.random() * 100 :
-                     stock.symbol.includes('sz399005') ? 6000 + Math.random() * 500 : 100
+    const basePrice = stock.symbol === '600519' ? 1500 + Math.random() * 100 :
+                     stock.symbol === '000858' ? 200 + Math.random() * 20 :
+                     stock.symbol === '000333' ? 60 + Math.random() * 10 :
+                     stock.symbol === '000001' ? 10 + Math.random() * 2 :
+                     stock.symbol === '600036' ? 30 + Math.random() * 5 :
+                     stock.symbol === '000002' ? 20 + Math.random() * 3 :
+                     stock.symbol === '601318' ? 40 + Math.random() * 5 :
+                     stock.symbol === '600276' ? 30 + Math.random() * 5 :
+                     stock.symbol === '600887' ? 25 + Math.random() * 3 :
+                     stock.symbol === '000651' ? 35 + Math.random() * 5 : 10
     
     const changePercent = (Math.random() - 0.5) * 2 // -1% 到 +1%
     const changeAmount = basePrice * changePercent / 100
@@ -343,9 +267,9 @@ export const getFormattedLastUpdateTime = (): string => {
   })
 }
 
-// 获取下一次更新时间（30分钟后）
+// 获取下一次更新时间（5分钟后）
 export const getNextUpdateTime = (): string => {
-  const next = new Date(Date.now() + 30 * 60 * 1000) // 30分钟后
+  const next = new Date(Date.now() + 5 * 60 * 1000) // 5分钟后
   return next.toLocaleString('zh-CN', {
     hour: '2-digit',
     minute: '2-digit',
@@ -353,65 +277,15 @@ export const getNextUpdateTime = (): string => {
   })
 }
 
-// 实际API配置（用于连接真实数据源）
-// 使用代理服务器避免CORS问题
-const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || 'http://localhost:3001'
+// 导出 fetchFundData 和 fetchStockData 以保持兼容性
+export const fetchFundData = fetchFundData
+export const fetchStockData = fetchStockData
 
-export const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
-
-// 真实数据源API（示例）
-export const realDataApis = {
-  // 天天基金API（示例）
-  tiantian: 'https://fundgz.1234567.com.cn/js/',
-  
-  // 东方财富API（示例）
-  eastmoney: 'https://push2.eastmoney.com/api/',
-  
-  // 雪球API（示例）
-  xueqiu: 'https://stock.xueqiu.com/v5/',
-  
-  // 雅虎财经API（示例）
-  yahoo: 'https://query1.finance.yahoo.com/v8/finance/'
-}
-
-// 获取真实基金数据（示例函数）
-export const fetchRealFundData = async (fundCodes: string[]): Promise<Fund[]> => {
-  try {
-    // 这里可以调用真实API，例如天天基金
-    // const responses = await Promise.all(
-    //   fundCodes.map(code => 
-    //     axios.get(`${realDataApis.tiantian}${code}.js`)
-    //   )
-    // )
-    
-    // 暂时返回模拟数据
-    return fetchFundData()
-  } catch (error) {
-    console.error('获取真实基金数据失败:', error)
-    return fetchFundData() // 降级到模拟数据
-  }
-}
-
-// 获取真实股票数据（示例函数）
-export const fetchRealStockData = async (symbols: string[]): Promise<StockData[]> => {
-  try {
-    // 这里可以调用真实API，例如雅虎财经
-    // const responses = await Promise.all(
-    //   symbols.map(symbol => 
-    //     axios.get(`${realDataApis.yahoo}chart/${symbol}?interval=1d&range=1d`)
-    //   )
-    // )
-    
-    // 暂时返回模拟数据
-    return fetchStockData()
-  } catch (error) {
-    console.error('获取真实股票数据失败:', error)
-    return fetchStockData() // 降级到模拟数据
-  }
+// 导出所有函数
+export {
+  fetchFundData,
+  fetchStockData,
+  getMarketStatus,
+  getFormattedLastUpdateTime,
+  getNextUpdateTime
 }

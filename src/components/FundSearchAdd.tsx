@@ -10,12 +10,12 @@ import {
   StarOutlined, StarFilled, InfoCircleOutlined,
   ReloadOutlined, EditOutlined
 } from '@ant-design/icons'
-import type { FundSearchResult } from '../services/fundSearchService'
+import type { FundSearchResult } from "../services/unifiedAkshareService"'
 import { 
   searchFunds, addFundToUserList, removeFundFromUserList, 
   getUserFunds, getSearchHistory, clearSearchHistory,
   exportUserFunds, importUserFunds, updateFundNote, getFundNote
-} from '../services/fundSearchService'
+} from "../services/unifiedAkshareService"'
 
 const { Text } = Typography
 

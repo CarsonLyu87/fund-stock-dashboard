@@ -65,8 +65,8 @@ export interface FundNetValue {
 async function getYesterdayNetValue(fundCode: string, fundName: string): Promise<FundNetValue> {
   try {
     // 尝试从现有accurateFundService获取
-    const { fetchAccurateFundData } = await import('../services/accurateFundService')
-    const funds = await fetchAccurateFundData()
+    const { fetchFundData } = await import('../services/accurateFundService')
+    const funds = await fetchFundData()
     
     const fund = funds.find(f => f.code === fundCode)
     if (fund) {

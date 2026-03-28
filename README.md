@@ -184,3 +184,20 @@ python3 akshare_bridge.py funds '{"codes": ["005827"]}'
 ---
 
 **数据仅供参考，投资需谨慎**
+## 数据源说明
+
+本项目使用 **AKShare** 作为唯一数据源，提供稳定可靠的金融数据。
+
+### AKShare 特点
+- ✅ 稳定可靠的开源金融数据接口
+- ✅ 丰富的中国金融市场数据
+- ✅ 本地运行，无需API密钥
+- ✅ 5分钟数据缓存
+- ✅ 优雅降级到模拟数据
+
+### 快速开始
+1. 安装 Python 和 AKShare: `pip install akshare`
+2. 启动 AKShare 服务器: `./start_akshare_server.sh`
+3. 运行项目: `npm run dev`
+
+详细配置请参考 [AKSHARE_DATA_SOURCE.md](AKSHARE_DATA_SOURCE.md)

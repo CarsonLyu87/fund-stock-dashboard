@@ -1,18 +1,19 @@
 /**
- * AKShare 数据服务
- * 使用 AKShare 作为唯一数据源，提供稳定可靠的基金和股票数据
+ * 统一 AKShare 数据服务
+ * 替换所有旧的数据服务，提供统一的 AKShare 数据访问接口
  */
 
 import type { Fund, StockData } from '../types'
 
-// AKShare API 基础URL（通过本地Python桥接服务）
+// AKShare API 基础URL
 const AKSHARE_BASE_URL = 'http://localhost:3002'
 
 // 数据缓存
 const cache = {
   funds: new Map<string, { data: Fund[], timestamp: number }>(),
   stocks: new Map<string, { data: StockData[], timestamp: number }>(),
-  fundDetails: new Map<string, { data: any, timestamp: number }>()
+  fundDetails: new Map<string, { data: any, timestamp: number }>(),
+  fundSearch: new Map<string, { data: any[], timestamp: number }>()
 }
 
 // 缓存配置
@@ -95,7 +96,7 @@ export async function fetchFundData(fundCodes?: string[]): Promise<Fund[]> {
       timestamp: item.timestamp || new Date().toISOString(),
       estimatedValue: item.estimated_value,
       estimatedChangePercent: item.estimated_change_percent,
-      dataSources: ['akshare_fund']
+      dataSources: ['akshare']
     }))
 
     // 更新缓存
@@ -179,7 +180,7 @@ export async function fetchStockData(stockCodes?: string[]): Promise<StockData[]
 }
 
 /**
- * 获取基金详细信息（持仓、历史净值等）
+ * 获取基金详细信息
  */
 export async function getFundDetail(fundCode: string): Promise<any> {
   const cacheKey = fundCode
@@ -221,16 +222,106 @@ export async function getFundDetail(fundCode: string): Promise<any> {
  * 搜索基金
  */
 export async function searchFunds(keyword: string): Promise<any[]> {
+  const cacheKey = keyword.toLowerCase()
+  const now = Date.now()
+  
+  // 检查缓存
+  const cached = cache.fundSearch.get(cacheKey)
+  if (cached && now - cached.timestamp < CACHE_TTL) {
+    console.log(`使用缓存的基金搜索结果: ${keyword}`)
+    return cached.data
+  }
+
   try {
     console.log(`通过AKShare搜索基金: ${keyword}`)
     
     const searchResults = await callAkshareBridge('search-funds', { keyword })
     
+    // 更新缓存
+    cache.fundSearch.set(cacheKey, { data: searchResults, timestamp: now })
+    
     return searchResults
     
   } catch (error) {
     console.error('搜索基金失败:', error)
+    
+    // 如果缓存中有数据，返回缓存数据
+    const cached = cache.fundSearch.get(cacheKey)
+    if (cached) {
+      console.warn(`使用缓存的基金搜索结果（降级模式）: ${keyword}`)
+      return cached.data
+    }
+    
     return []
+  }
+}
+
+/**
+ * 获取基金持仓信息
+ */
+export async function getFundHoldings(fundCode: string): Promise<any[]> {
+  try {
+    console.log(`通过AKShare获取基金持仓: ${fundCode}`)
+    
+    const detailData = await getFundDetail(fundCode)
+    
+    // 从详情数据中提取持仓信息
+    const positions = detailData.positions || []
+    
+    return positions.map((position: any) => ({
+      stockCode: position.stock_code || position.code || '',
+      stockName: position.stock_name || position.name || '',
+      holdingAmount: position.holding_amount || position.amount || 0,
+      holdingValue: position.holding_value || position.value || 0,
+      proportion: position.proportion || position.weight || 0
+    }))
+    
+  } catch (error) {
+    console.error(`获取基金持仓失败 (${fundCode}):`, error)
+    return []
+  }
+}
+
+/**
+ * 获取股票价格
+ */
+export async function getStockPrice(stockCode: string): Promise<number | null> {
+  try {
+    console.log(`通过AKShare获取股票价格: ${stockCode}`)
+    
+    const stockData = await fetchStockData([stockCode])
+    
+    if (stockData.length > 0) {
+      return stockData[0].price
+    }
+    
+    return null
+    
+  } catch (error) {
+    console.error(`获取股票价格失败 (${stockCode}):`, error)
+    return null
+  }
+}
+
+/**
+ * 批量获取股票价格
+ */
+export async function getStockPrices(stockCodes: string[]): Promise<Record<string, number>> {
+  try {
+    console.log(`通过AKShare批量获取股票价格: ${stockCodes.length} 只股票`)
+    
+    const stockData = await fetchStockData(stockCodes)
+    
+    const prices: Record<string, number> = {}
+    stockData.forEach(stock => {
+      prices[stock.symbol] = stock.price
+    })
+    
+    return prices
+    
+  } catch (error) {
+    console.error('批量获取股票价格失败:', error)
+    return {}
   }
 }
 
@@ -240,24 +331,15 @@ export async function searchFunds(keyword: string): Promise<any[]> {
 export function getDataSourceStatus() {
   const now = new Date()
   
-  // 统计缓存状态
-  const fundCacheCount = cache.funds.size
-  const stockCacheCount = cache.stocks.size
-  const detailCacheCount = cache.fundDetails.size
-  
-  // 计算缓存命中率（简化版本）
-  const totalCacheEntries = fundCacheCount + stockCacheCount + detailCacheCount
-  
   return {
     provider: 'akshare',
     status: 'active',
     baseUrl: AKSHARE_BASE_URL,
     cache: {
-      funds: fundCacheCount,
-      stocks: stockCacheCount,
-      details: detailCacheCount,
-      total: totalCacheEntries,
-      ttl: CACHE_TTL / 60000 // 转换为分钟
+      funds: cache.funds.size,
+      stocks: cache.stocks.size,
+      details: cache.fundDetails.size,
+      search: cache.fundSearch.size
     },
     lastUpdate: now.toISOString(),
     nextUpdate: new Date(now.getTime() + CACHE_TTL).toISOString(),
@@ -265,7 +347,8 @@ export function getDataSourceStatus() {
       '基金实时净值',
       '股票实时行情',
       '基金详情信息',
-      '基金搜索',
+      '基金持仓数据',
+      '基金搜索功能',
       '数据缓存'
     ]
   }
@@ -278,6 +361,7 @@ export function clearCache(): void {
   cache.funds.clear()
   cache.stocks.clear()
   cache.fundDetails.clear()
+  cache.fundSearch.clear()
   console.log('AKShare数据缓存已清除')
 }
 
@@ -285,13 +369,12 @@ export function clearCache(): void {
  * 初始化数据服务
  */
 export function initDataService(): void {
-  console.log('初始化AKShare数据服务')
+  console.log('初始化统一AKShare数据服务')
   console.log('服务特点:')
   console.log('- 使用AKShare作为唯一数据源')
-  console.log('- 通过本地Python桥接服务访问')
+  console.log('- 统一的API接口')
   console.log('- 5分钟数据缓存')
-  console.log('- 自动降级到缓存数据')
-  console.log('- 支持基金和股票实时数据')
+  console.log('- 支持所有数据需求')
 }
 
 /**
@@ -334,7 +417,50 @@ export function getUpdateInfo() {
     cacheStatus: {
       funds: cache.funds.size,
       stocks: cache.stocks.size,
-      details: cache.fundDetails.size
+      details: cache.fundDetails.size,
+      search: cache.fundSearch.size
+    }
+  }
+}
+
+/**
+ * 检查服务状态
+ */
+export async function checkServiceStatus(): Promise<{
+  available: boolean;
+  status?: string;
+  error?: string;
+}> {
+  try {
+    const url = `${AKSHARE_BASE_URL}/status`
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      timeout: 5000
+    })
+    
+    if (!response.ok) {
+      return {
+        available: false,
+        error: `HTTP ${response.status}: ${response.statusText}`
+      }
+    }
+    
+    const data = await response.json()
+    
+    return {
+      available: data.success === true,
+      status: data.data?.status || 'unknown'
+    }
+    
+  } catch (error) {
+    return {
+      available: false,
+      error: error instanceof Error ? error.message : '未知错误'
     }
   }
 }
@@ -366,9 +492,13 @@ export {
   fetchStockData,
   getFundDetail,
   searchFunds,
+  getFundHoldings,
+  getStockPrice,
+  getStockPrices,
   getDataSourceStatus,
   clearCache,
   initDataService,
   getMarketStatus,
-  getUpdateInfo
+  getUpdateInfo,
+  checkServiceStatus
 }

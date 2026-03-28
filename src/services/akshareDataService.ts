@@ -76,8 +76,16 @@ class AKShareDataService {
    * 检查 AKshare 是否可用
    */
   private async checkAKShareAvailability(): Promise<boolean> {
+    // 检查是否在浏览器环境中
+    const isBrowser = typeof window !== 'undefined';
+    
+    if (isBrowser) {
+      console.log('🌐 浏览器环境检测：跳过 AKshare 检查');
+      return false;
+    }
+    
     try {
-      // 尝试导入 AKshare
+      // 尝试导入 AKshare（仅限Node.js环境）
       const { exec } = require('child_process');
       const { promisify } = require('util');
       const execAsync = promisify(exec);
@@ -95,6 +103,14 @@ class AKShareDataService {
    * 通过 Python 桥接脚本调用 AKshare
    */
   private async callAKShareBridge(command: string, data: any): Promise<any> {
+    // 检查是否在浏览器环境中
+    const isBrowser = typeof window !== 'undefined';
+    
+    if (isBrowser) {
+      console.log('🌐 浏览器环境检测：跳过 AKshare 桥接调用');
+      throw new Error('AKshare 在浏览器环境中不可用');
+    }
+    
     return new Promise((resolve, reject) => {
       const { exec } = require('child_process');
       const { promisify } = require('util');

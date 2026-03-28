@@ -4,10 +4,35 @@
  */
 
 import type { Fund, StockData } from '../types'
-import { akshareDataService, initializeAKShareData } from './akshareDataService'
 import { fetchAccurateFundData } from './accurateFundService'
 import { getRealFundHoldings, estimateFundValuation } from './realFundHoldingsService'
 import { calculateFundValuationByPortfolio } from './fundPortfolioService'
+
+// AKshare 服务引用
+let akshareDataService: any = null
+let initializeAKShareData: () => Promise<void> = async () => {
+  console.log('🌐 浏览器环境：跳过 AKshare 初始化')
+}
+
+/**
+ * 动态加载 AKshare 服务（仅在非浏览器环境中）
+ */
+async function loadAKShareService(): Promise<void> {
+  const isBrowser = typeof window !== 'undefined'
+  if (isBrowser) {
+    console.log('🌐 浏览器环境：跳过 AKshare 加载')
+    return
+  }
+  
+  try {
+    const akshareModule = await import('./akshareDataService')
+    akshareDataService = akshareModule.akshareDataService
+    initializeAKShareData = akshareModule.initializeAKShareData
+    console.log('✅ AKshare 服务加载成功')
+  } catch (error) {
+    console.warn('⚠️ 无法导入 AKshare 服务:', error.message)
+  }
+}
 
 // 数据服务状态
 interface DataServiceStatus {
@@ -34,14 +59,24 @@ class NewDataService {
   async initialize(): Promise<void> {
     console.log('🚀 初始化新数据服务（AKshare + 东方财富）...')
     
-    try {
-      // 初始化 AKshare 服务
-      await initializeAKShareData()
-      this.status.akshareAvailable = true
-      this.status.dataSources.push('akshare')
-      console.log('✅ AKshare 服务初始化成功')
-    } catch (error) {
-      console.warn('⚠️ AKshare 服务初始化失败，将使用东方财富API:', error.message)
+    const isBrowser = typeof window !== 'undefined'
+    
+    if (!isBrowser) {
+      try {
+        // 先加载 AKshare 服务
+        await loadAKShareService()
+        
+        // 然后初始化 AKshare 服务（仅限Node.js环境）
+        await initializeAKShareData()
+        this.status.akshareAvailable = true
+        this.status.dataSources.push('akshare')
+        console.log('✅ AKshare 服务初始化成功')
+      } catch (error) {
+        console.warn('⚠️ AKshare 服务初始化失败，将使用东方财富API:', error.message)
+        this.status.akshareAvailable = false
+      }
+    } else {
+      console.log('🌐 浏览器环境：跳过 AKshare 初始化')
       this.status.akshareAvailable = false
     }
     
@@ -150,24 +185,35 @@ class NewDataService {
    * 从 AKshare 获取基金数据
    */
   private async getFundsFromAKshare(codes: string[]): Promise<Fund[]> {
-    const akshareFunds = akshareDataService.getAllFunds()
+    // 检查 AKshare 是否可用
+    if (!akshareDataService || !this.status.akshareAvailable) {
+      console.log('🌐 AKshare 不可用，跳过获取基金数据')
+      return []
+    }
     
-    // 过滤出请求的基金代码
-    const filteredFunds = akshareFunds.filter(fund => codes.includes(fund.code))
-    
-    return filteredFunds.map(fund => ({
-      id: `fund_${fund.code}`,
-      name: fund.name,
-      code: fund.code,
-      currentPrice: fund.net_value,
-      changePercent: fund.change_percent,
-      changeAmount: fund.change,
-      volume: 0, // AKshare 不提供基金成交量
-      timestamp: fund.timestamp,
-      estimatedValue: fund.net_value,
-      estimatedChangePercent: fund.change_percent,
-      dataSources: ['akshare']
-    }))
+    try {
+      const akshareFunds = akshareDataService.getAllFunds()
+      
+      // 过滤出请求的基金代码
+      const filteredFunds = akshareFunds.filter(fund => codes.includes(fund.code))
+      
+      return filteredFunds.map(fund => ({
+        id: `fund_${fund.code}`,
+        name: fund.name,
+        code: fund.code,
+        currentPrice: fund.net_value,
+        changePercent: fund.change_percent,
+        changeAmount: fund.change,
+        volume: 0, // AKshare 不提供基金成交量
+        timestamp: fund.timestamp,
+        estimatedValue: fund.net_value,
+        estimatedChangePercent: fund.change_percent,
+        dataSources: ['akshare']
+      }))
+    } catch (error) {
+      console.warn('从 AKshare 获取基金数据失败:', error.message)
+      return []
+    }
   }
   
   /**
@@ -287,23 +333,34 @@ class NewDataService {
    * 从 AKshare 获取股票数据
    */
   private async getStocksFromAKshare(codes: string[]): Promise<StockData[]> {
-    const akshareStocks = akshareDataService.getAllStocks()
+    // 检查 AKshare 是否可用
+    if (!akshareDataService || !this.status.akshareAvailable) {
+      console.log('🌐 AKshare 不可用，跳过获取股票数据')
+      return []
+    }
     
-    // 过滤出请求的股票代码
-    const filteredStocks = akshareStocks.filter(stock => codes.includes(stock.code))
-    
-    return filteredStocks.map(stock => ({
-      id: `stock_${stock.code}`,
-      symbol: stock.code.startsWith('6') ? `sh${stock.code}` : `sz${stock.code}`,
-      name: stock.name,
-      price: stock.latest_price,
-      change: stock.change,
-      changePercent: stock.change_percent,
-      volume: stock.volume,
-      timestamp: stock.timestamp,
-      history: this.generateHourlyHistory(stock.latest_price),
-      dataSources: ['akshare']
-    }))
+    try {
+      const akshareStocks = akshareDataService.getAllStocks()
+      
+      // 过滤出请求的股票代码
+      const filteredStocks = akshareStocks.filter(stock => codes.includes(stock.code))
+      
+      return filteredStocks.map(stock => ({
+        id: `stock_${stock.code}`,
+        symbol: stock.code.startsWith('6') ? `sh${stock.code}` : `sz${stock.code}`,
+        name: stock.name,
+        price: stock.latest_price,
+        change: stock.change,
+        changePercent: stock.change_percent,
+        volume: stock.volume,
+        timestamp: stock.timestamp,
+        history: this.generateHourlyHistory(stock.latest_price),
+        dataSources: ['akshare']
+      }))
+    } catch (error) {
+      console.warn('从 AKshare 获取股票数据失败:', error.message)
+      return []
+    }
   }
   
   /**
@@ -466,7 +523,50 @@ class NewDataService {
    * 获取市场状态
    */
   getMarketStatus() {
-    return akshareDataService.getMarketStatus()
+    // 检查 AKshare 是否可用
+    if (!akshareDataService || !this.status.akshareAvailable) {
+      console.log('🌐 AKshare 不可用，使用默认市场状态')
+      return this.getDefaultMarketStatus()
+    }
+    
+    try {
+      return akshareDataService.getMarketStatus()
+    } catch (error) {
+      console.warn('获取市场状态失败，使用默认状态:', error.message)
+      return this.getDefaultMarketStatus()
+    }
+  }
+  
+  /**
+   * 获取默认市场状态（浏览器环境使用）
+   */
+  private getDefaultMarketStatus() {
+    const now = new Date()
+    const hour = now.getHours()
+    const isWeekend = now.getDay() === 0 || now.getDay() === 6
+    
+    // 交易时间：周一至周五 9:30-11:30, 13:00-15:00
+    const isTradingHour = !isWeekend && (
+      (hour >= 9 && hour < 11) || 
+      (hour === 11 && now.getMinutes() < 30) ||
+      (hour >= 13 && hour < 15)
+    )
+    
+    let nextOpenTime = '明日 09:30'
+    if (isWeekend) {
+      nextOpenTime = '下周一 09:30'
+    } else if (hour < 9 || (hour === 9 && now.getMinutes() < 30)) {
+      nextOpenTime = '今日 09:30'
+    } else if (hour < 13) {
+      nextOpenTime = '今日 13:00'
+    }
+    
+    return {
+      is_open: isTradingHour,
+      open_time: '09:30',
+      close_time: '15:00',
+      next_open_time: nextOpenTime
+    }
   }
   
   /**
@@ -485,8 +585,14 @@ class NewDataService {
       this.updateInterval = null
     }
     
-    // 停止 AKshare 服务
-    akshareDataService.stop()
+    // 停止 AKshare 服务（如果可用）
+    if (akshareDataService && typeof akshareDataService.stop === 'function') {
+      try {
+        akshareDataService.stop()
+      } catch (error) {
+        console.warn('停止 AKshare 服务失败:', error.message)
+      }
+    }
     
     console.log('🛑 新数据服务已停止')
   }
